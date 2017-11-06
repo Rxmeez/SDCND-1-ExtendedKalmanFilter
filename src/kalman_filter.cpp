@@ -6,6 +6,8 @@ using Eigen::VectorXd;
 // Please note that the Eigen library does not initialize 
 // VectorXd or MatrixXd objects with zeros upon creation.
 
+const float DoublePI = 2 * M_PI;
+
 KalmanFilter::KalmanFilter() {}
 
 KalmanFilter::~KalmanFilter() {}
@@ -35,17 +37,20 @@ void KalmanFilter::Update(const VectorXd &z) {
   TODO:
     * update the state by using Kalman Filter equations
   */
-  VectorXd y = z - (H_ * x_);
+  VectorXd z_pred = H_ * x_;
+
+  VectorXd y = z - z_pred;
   MatrixXd Ht = H_.transpose();
-  MatrixXd S = (H_ * P_ * Ht) + R_;
+  MatrixXd PHt = P_ * Ht;
+  MatrixXd S = H_ * PHt + R_;
   MatrixXd Si = S.inverse();
-  MatrixXd K = (P_ * Ht * Si);
+  MatrixXd K = PHt * Si;
 
   //new estimate
   x_ = x_ + (K * y);
   long x_size = x_.size();
   MatrixXd I = MatrixXd::Identity(x_size, x_size);
-  P_ = (I - (K * H_)) * P_;
+  P_ = (I - K * H_) * P_;
 }
 
 void KalmanFilter::UpdateEKF(const VectorXd &z) {
@@ -63,30 +68,40 @@ void KalmanFilter::UpdateEKF(const VectorXd &z) {
   float rho = sqrt(px * px + py * py);
   float phi = atan2(py,px);
   float rhodot;
+
   //check division by zero
-  if(fabs(rho) < 0.0001)
+  if(rho < 0.000001)
   {
-    rhodot = 0;
-  }else{
-    rhodot = (px*vx+py*vy)/rho;
+    rho = 0.000001;
   }
+  rhodot = (px * vx + py * vy)/rho;
 
   //Feed in equations above
   VectorXd H_func(3);
-  H_func << rho,
-            phi,
-            rhodot;
+  H_func << rho, phi, rhodot;
 
   VectorXd y = z - H_func;
+
+  // normalize the angle between -pi to pi
+  while(y(1) > M_PI){
+      y(1) -= DoublePI;
+  }
+
+  while(y(1) < -M_PI){
+      y(1) += DoublePI;
+  }
+
+  // following is exact the same as in the function of KalmanFilter::Update()
   MatrixXd Ht = H_.transpose();
-  MatrixXd S = (H_ * P_ * Ht) + R_;
+  MatrixXd PHt = P_ * Ht;
+  MatrixXd S = H_ * PHt + R_;
   MatrixXd Si = S.inverse();
-  MatrixXd K = (P_ * Ht * Si);
+  MatrixXd K = PHt * Si;
 
   //new estimate
   x_ = x_ + (K * y);
   long x_size = x_.size();
   MatrixXd I = MatrixXd::Identity(x_size, x_size);
-  P_ = (I - (K * H_) * P_);
+  P_ = (I - K * H_) * P_;
 
 }
